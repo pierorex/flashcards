@@ -1,122 +1,224 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useRef, useState } from 'react'
+import { type Card, dueCards, newCard, requeue, review } from './srs'
+import { load, save } from './storage'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+function speak(hanzi: string) {
+  const u = new SpeechSynthesisUtterance(hanzi)
+  u.lang = 'zh-CN'
+  u.rate = 0.85
+  speechSynthesis.cancel()
+  speechSynthesis.speak(u)
+}
+
+/** Which side of the card is hidden. */
+type Direction = 'zh-en' | 'en-zh'
+type Turn = { card: Card; dir: Direction }
+
+export default function App() {
+  const [cards, setCards] = useState<Card[]>(load)
+  const [screen, setScreen] = useState<'home' | 'add' | 'play'>('home')
+
+  useEffect(() => save(cards), [cards])
+
+  const due = dueCards(cards, Date.now())
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
+    <main>
+      {screen === 'home' && (
+        <div className="home">
+          <h1>汉字</h1>
+          <p className="count">
+            {cards.length === 0
+              ? 'No words yet.'
+              : `${due.length} of ${cards.length} due`}
           </p>
+          <button
+            className="big"
+            disabled={due.length === 0}
+            onClick={() => setScreen('play')}
+          >
+            Study
+          </button>
+          <button className="ghost" onClick={() => setScreen('add')}>
+            Add words
+          </button>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      )}
 
-      <div className="ticks"></div>
+      {screen === 'add' && (
+        <AddWords
+          onAdd={(c) => setCards((cs) => [...cs, c])}
+          onDone={() => setScreen('home')}
+        />
+      )}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {screen === 'play' && (
+        <Play
+          due={due}
+          onReview={(card, ok) =>
+            setCards((cs) =>
+              cs.map((c) => (c.id === card.id ? review(c, ok, Date.now()) : c)),
+            )
+          }
+          onDone={() => setScreen('home')}
+        />
+      )}
+    </main>
   )
 }
 
-export default App
+function AddWords({
+  onAdd,
+  onDone,
+}: {
+  onAdd: (c: Card) => void
+  onDone: () => void
+}) {
+  const [hanzi, setHanzi] = useState('')
+  const [pinyin, setPinyin] = useState('')
+  const [english, setEnglish] = useState('')
+  const [added, setAdded] = useState<string[]>([])
+  const first = useRef<HTMLInputElement>(null)
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!hanzi.trim() || !english.trim()) return
+    onAdd(newCard(hanzi.trim(), pinyin.trim(), english.trim()))
+    setAdded((a) => [hanzi.trim(), ...a])
+    setHanzi('')
+    setPinyin('')
+    setEnglish('')
+    first.current?.focus()
+  }
+
+  return (
+    <form className="add" onSubmit={submit}>
+      <input
+        ref={first}
+        value={hanzi}
+        onChange={(e) => setHanzi(e.target.value)}
+        placeholder="汉字"
+        className="hanzi-input"
+        autoFocus
+      />
+      <input
+        value={pinyin}
+        onChange={(e) => setPinyin(e.target.value)}
+        placeholder="pīnyīn"
+      />
+      <input
+        value={english}
+        onChange={(e) => setEnglish(e.target.value)}
+        placeholder="english"
+      />
+      <div className="row">
+        <button type="button" className="ghost" onClick={onDone}>
+          Done
+        </button>
+        <button type="submit" className="big">
+          Add
+        </button>
+      </div>
+      {added.length > 0 && (
+        <p className="count">Added: {added.slice(0, 8).join('  ')}</p>
+      )}
+    </form>
+  )
+}
+
+function Play({
+  due,
+  onReview,
+  onDone,
+}: {
+  due: Card[]
+  onReview: (card: Card, ok: boolean) => void
+  onDone: () => void
+}) {
+  const [queue, setQueue] = useState<Turn[]>(() =>
+    due.map((card) => ({
+      card,
+      dir: Math.random() < 0.5 ? 'zh-en' : 'en-zh',
+    })),
+  )
+  const [revealed, setRevealed] = useState(false)
+  const [score, setScore] = useState({ right: 0, wrong: 0 })
+
+  const turn = queue[0]
+
+  if (!turn) {
+    return (
+      <div className="home">
+        <h1>{score.wrong === 0 ? '完美' : '好'}</h1>
+        <p className="count">
+          {score.right} right · {score.wrong} missed
+        </p>
+        <button className="big" onClick={onDone}>
+          Done
+        </button>
+      </div>
+    )
+  }
+
+  function grade(ok: boolean) {
+    onReview(turn.card, ok)
+    setScore((s) => ({
+      right: s.right + (ok ? 1 : 0),
+      wrong: s.wrong + (ok ? 0 : 1),
+    }))
+    setRevealed(false)
+    // Missed cards come back later this session; correct ones are done for now.
+    setQueue((q) => (ok ? q.slice(1) : requeue(q.slice(1), turn, 3)))
+  }
+
+  function miss() {
+    setRevealed(true)
+    speak(turn.card.hanzi)
+  }
+
+  const showZh = turn.dir === 'zh-en' || revealed
+  const showEn = turn.dir === 'en-zh' || revealed
+
+  return (
+    <div className="play">
+      <div className="progress">{queue.length} left</div>
+
+      <div className="card">
+        {showZh && (
+          <>
+            <div className="hanzi">{turn.card.hanzi}</div>
+            <div className="pinyin">{turn.card.pinyin}</div>
+            <button
+              className="speak"
+              onClick={() => speak(turn.card.hanzi)}
+              aria-label="Play pronunciation"
+            >
+              🔊
+            </button>
+          </>
+        )}
+        {showEn && <div className="english">{turn.card.english}</div>}
+      </div>
+
+      {revealed ? (
+        <button className="big next" onClick={() => grade(false)}>
+          Got it — next
+        </button>
+      ) : (
+        <div className="row">
+          <button className="grade wrong" onClick={miss} aria-label="I forgot">
+            ✕
+          </button>
+          <button
+            className="grade right"
+            onClick={() => grade(true)}
+            aria-label="I knew it"
+          >
+            ✓
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

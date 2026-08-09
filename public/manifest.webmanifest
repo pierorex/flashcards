@@ -1,0 +1,18 @@
+{
+  "name": "Chinese Flashcards",
+  "short_name": "汉字",
+  "start_url": "/flashcards/",
+  "scope": "/flashcards/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12130f",
+  "theme_color": "#12130f",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
