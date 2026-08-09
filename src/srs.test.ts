@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DAY, dueCards, newCard, requeue, review } from './srs'
+import { DAY, dueCards, newCard, requeue, review, studySession } from './srs'
 
 const now = Date.UTC(2026, 0, 1)
 
@@ -59,6 +59,43 @@ describe('dueCards', () => {
   it('treats a brand new card as due immediately', () => {
     const fresh = newCard('新', 'xīn', 'new')
     expect(dueCards([fresh], now)).toEqual([fresh])
+  })
+})
+
+describe('studySession', () => {
+  it('studies the due cards when there are any', () => {
+    const due = { ...newCard('a', 'a', 'a'), due: now }
+    const later = { ...newCard('b', 'b', 'b'), due: now + DAY }
+    expect(studySession([due, later], now)).toEqual({
+      cards: [due],
+      practice: false,
+    })
+  })
+
+  it('falls back to the whole deck as practice when nothing is due', () => {
+    const later = { ...newCard('b', 'b', 'b'), due: now + DAY }
+    expect(studySession([later], now)).toEqual({
+      cards: [later],
+      practice: true,
+    })
+  })
+
+  it('has nothing to study with an empty deck', () => {
+    expect(studySession([], now)).toEqual({ cards: [], practice: false })
+  })
+})
+
+describe('practice review', () => {
+  it('never promotes a card past its real schedule', () => {
+    let c = review(newCard('好', 'hǎo', 'good'), true, now)
+    const scheduled = c
+    for (let i = 0; i < 5; i++) c = review(c, true, now, true)
+    expect(c).toEqual(scheduled)
+  })
+
+  it('still demotes a card that gets missed during practice', () => {
+    const c = review(newCard('好', 'hǎo', 'good'), true, now)
+    expect(review(c, false, now, true).box).toBe(0)
   })
 })
 

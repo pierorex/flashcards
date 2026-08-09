@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { type Card, dueCards, newCard, requeue, review } from './srs'
+import { type Card, newCard, requeue, review, studySession } from './srs'
 import { load, save } from './storage'
 import './App.css'
 
@@ -21,7 +21,7 @@ export default function App() {
 
   useEffect(() => save(cards), [cards])
 
-  const due = dueCards(cards, Date.now())
+  const session = studySession(cards, Date.now())
 
   return (
     <main>
@@ -31,14 +31,16 @@ export default function App() {
           <p className="count">
             {cards.length === 0
               ? 'No words yet.'
-              : `${due.length} of ${cards.length} due`}
+              : session.practice
+                ? `Nothing due — ${cards.length} in the deck`
+                : `${session.cards.length} of ${cards.length} due`}
           </p>
           <button
             className="big"
-            disabled={due.length === 0}
+            disabled={cards.length === 0}
             onClick={() => setScreen('play')}
           >
-            Study
+            {session.practice ? 'Practice anyway' : 'Study'}
           </button>
           <button className="ghost" onClick={() => setScreen('add')}>
             Add words
@@ -55,10 +57,15 @@ export default function App() {
 
       {screen === 'play' && (
         <Play
-          due={due}
+          due={session.cards}
+          practice={session.practice}
           onReview={(card, ok) =>
             setCards((cs) =>
-              cs.map((c) => (c.id === card.id ? review(c, ok, Date.now()) : c)),
+              cs.map((c) =>
+                c.id === card.id
+                  ? review(c, ok, Date.now(), session.practice)
+                  : c,
+              ),
             )
           }
           onDone={() => setScreen('home')}
@@ -129,10 +136,12 @@ function AddWords({
 
 function Play({
   due,
+  practice,
   onReview,
   onDone,
 }: {
   due: Card[]
+  practice: boolean
   onReview: (card: Card, ok: boolean) => void
   onDone: () => void
 }) {
@@ -182,7 +191,9 @@ function Play({
 
   return (
     <div className="play">
-      <div className="progress">{queue.length} left</div>
+      <div className="progress">
+        {queue.length} left{practice && ' · practice'}
+      </div>
 
       <div className="card">
         {showZh && (
