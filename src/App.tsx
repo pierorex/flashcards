@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
-import { parseWords } from './parse'
+import { type Row, overwrite, parseWords, splitNew } from './parse'
 import {
   type Card,
   type Grade,
@@ -9,6 +9,7 @@ import {
   requeue,
   resetProgress,
   review,
+  matchesQuery,
   studySession,
   worstWords,
 } from './srs'
@@ -51,7 +52,10 @@ export default function App() {
             disabled={cards.length === 0}
             onClick={() => setScreen('play')}
           >
-            Study - {session.due} left today, {cards.length} total
+            Study
+            <span className="sub">
+              {session.due} left today, {cards.length} total
+            </span>
           </button>
           {cards.length > 0 && (
             <button className="ghost" onClick={() => setScreen('auto')}>
@@ -78,6 +82,7 @@ export default function App() {
               ...rows.map((r) => newCard(r.hanzi, r.pinyin, r.english)),
             ])
           }
+          onOverwrite={(rows) => setCards((cs) => overwrite(cs, rows))}
           onDone={() => setScreen('home')}
         />
       )}
@@ -202,21 +207,33 @@ function WordForm({
 function Add({
   known,
   onAdd,
+  onOverwrite,
   onDone,
 }: {
   known: string[]
-  onAdd: (rows: { hanzi: string; pinyin: string; english: string }[]) => void
+  onAdd: (rows: Row[]) => void
+  onOverwrite: (rows: Row[]) => void
   onDone: () => void
 }) {
   const [bulk, setBulk] = useState(false)
   const [text, setText] = useState('')
   const [added, setAdded] = useState<string[]>([])
+  const [skipped, setSkipped] = useState<Row[]>([])
+
+  /** Both the single form and the paste box come through here. */
+  function submit(rows: Row[]) {
+    const split = splitNew(rows, known)
+    if (split.add.length > 0) {
+      onAdd(split.add)
+      setAdded((a) => [...split.add.map((r) => r.hanzi), ...a])
+    }
+    setSkipped(split.skipped)
+  }
 
   function importPaste() {
-    const rows = parseWords(text, [...known, ...added])
+    const rows = parseWords(text)
     if (rows.length === 0) return
-    onAdd(rows)
-    setAdded((a) => [...rows.map((r) => r.hanzi), ...a])
+    submit(rows)
     setText('')
   }
 
@@ -243,14 +260,7 @@ function Add({
         </div>
       ) : (
         <>
-          <WordForm
-            submitLabel="Add"
-            onSubmit={(row) => {
-              onAdd([row])
-              setAdded((a) => [row.hanzi, ...a])
-            }}
-            onCancel={onDone}
-          />
+          <WordForm submitLabel="Add" onSubmit={(row) => submit([row])} onCancel={onDone} />
           <button className="ghost" onClick={() => setBulk(true)}>
             Paste a list
           </button>
@@ -260,6 +270,23 @@ function Add({
         <p className="count">
           Added {added.length}: {added.slice(0, 8).join('  ')}
         </p>
+      )}
+      {skipped.length > 0 && (
+        <div className="skipped">
+          <p className="count">
+            Skipped {skipped.length} already in your deck:{' '}
+            {skipped.map((r) => r.hanzi).join('  ')}
+          </p>
+          <button
+            className="ghost danger"
+            onClick={() => {
+              onOverwrite(skipped)
+              setSkipped([])
+            }}
+          >
+            Overwrite {skipped.length} with the new text
+          </button>
+        </div>
       )}
       {bulk && (
         <button className="ghost" onClick={onDone}>
@@ -412,8 +439,10 @@ function Stats({
     key: 'rate',
     asc: true,
   })
+  const [query, setQuery] = useState('')
 
-  const rows = [...cards].sort((a, b) => {
+  const found = query ? cards.filter((c) => matchesQuery(c, query)) : cards
+  const rows = [...found].sort((a, b) => {
     const [x, y] = [value(a, sort.key), value(b, sort.key)]
     const cmp =
       typeof x === 'string' && typeof y === 'string'
@@ -428,11 +457,24 @@ function Stats({
 
   return (
     <>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search 汉字, pinyin or meaning"
+        aria-label="Search your deck"
+      />
       <p className="count">
-        {cards.length} words
-        {seen > 0 && ` · ${Math.round(((seen - lapses) / seen) * 100)}% overall`}
-        {leeches > 0 && ` · ${leeches} stuck`}
+        {query
+          ? `${rows.length} of ${cards.length} words`
+          : `${cards.length} words`}
+        {!query &&
+          seen > 0 &&
+          ` · ${Math.round(((seen - lapses) / seen) * 100)}% overall`}
+        {!query && leeches > 0 && ` · ${leeches} stuck`}
       </p>
+      {query && rows.length === 0 && (
+        <p className="count">Not in your deck yet.</p>
+      )}
       <table className="stats">
         <thead>
           <tr>

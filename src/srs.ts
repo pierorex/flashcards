@@ -66,7 +66,7 @@ export function studySession(
   const due = dueCards(cards, now)
   const pick = due.length > 0 ? due : cards
   return {
-    cards: pick.slice(0, cap),
+    cards: [...pick].sort(byStruggle).slice(0, cap),
     practice: due.length === 0 && cards.length > 0,
     due: due.length,
   }
@@ -86,17 +86,26 @@ export const resetProgress = (card: Card): Card => ({
 export const failRate = (card: Card): number =>
   card.seen > 0 ? card.lapses / card.seen : 0.5 // never seen is a coin flip
 
+/** Worst first: hardest words while you are still fresh. */
+const byStruggle = (a: Card, b: Card): number =>
+  failRate(b) - failRate(a) || b.lapses - a.lapses || a.box - b.box
+
 /** The n words you struggle with most — worst first. */
 export function worstWords(cards: Card[], n: number): Card[] {
-  return [...cards]
-    .sort(
-      (a, b) =>
-        failRate(b) - failRate(a) ||
-        b.lapses - a.lapses ||
-        a.box - b.box,
-    )
-    .slice(0, n)
+  return [...cards].sort(byStruggle).slice(0, n)
 }
+
+/** Tone marks are painful to type on a phone, so "ni hao" finds "nǐ hǎo". */
+const fold = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+
+export const matchesQuery = (card: Card, query: string): boolean =>
+  fold(`${card.hanzi} ${card.pinyin} ${card.english}`).includes(
+    fold(query.trim()),
+  )
 
 /** Put a missed card back into the session queue, `gap` cards from now. */
 export function requeue<T>(queue: T[], card: T, gap: number): T[] {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DAY,
   dueCards,
+  matchesQuery,
   newCard,
   requeue,
   resetProgress,
@@ -165,6 +166,24 @@ describe('studySession', () => {
     })
   })
 
+  it('orders the session worst-first, not by which went overdue first', () => {
+    const solid = { ...newCard('solid', '', 'solid'), due: now - 9 * DAY, seen: 10, lapses: 0, box: 4 }
+    const shaky = { ...newCard('shaky', '', 'shaky'), due: now - DAY, seen: 10, lapses: 8 }
+    expect(studySession([solid, shaky], now).cards.map((c) => c.hanzi)).toEqual([
+      'shaky',
+      'solid',
+    ])
+  })
+
+  it('orders free practice worst-first too', () => {
+    const solid = { ...newCard('solid', '', 'solid'), due: now + DAY, seen: 10, lapses: 0, box: 4 }
+    const shaky = { ...newCard('shaky', '', 'shaky'), due: now + DAY, seen: 10, lapses: 8 }
+    expect(studySession([solid, shaky], now).cards.map((c) => c.hanzi)).toEqual([
+      'shaky',
+      'solid',
+    ])
+  })
+
   it('caps a session so a big backlog is not one endless slog', () => {
     const many = Array.from({ length: 50 }, (_, i) =>
       newCard(String(i), '', String(i)),
@@ -259,6 +278,36 @@ describe('worstWords', () => {
 
   it('has nothing to drill in an empty deck', () => {
     expect(worstWords([], 5)).toEqual([])
+  })
+})
+
+describe('matchesQuery', () => {
+  const card = { ...newCard('你好', 'nǐ hǎo', 'hello') }
+
+  it('finds a word by its hanzi', () => {
+    expect(matchesQuery(card, '你好')).toBe(true)
+    expect(matchesQuery(card, '你')).toBe(true)
+  })
+
+  it('finds a word by meaning, ignoring case', () => {
+    expect(matchesQuery(card, 'HELLO')).toBe(true)
+  })
+
+  it('finds pinyin typed without tone marks', () => {
+    expect(matchesQuery(card, 'ni hao')).toBe(true)
+    expect(matchesQuery(card, 'nihao')).toBe(false) // spacing still matters
+  })
+
+  it('ignores surrounding whitespace in the query', () => {
+    expect(matchesQuery(card, '  hello  ')).toBe(true)
+  })
+
+  it('matches everything when the query is empty', () => {
+    expect(matchesQuery(card, '')).toBe(true)
+  })
+
+  it('does not match an unrelated query', () => {
+    expect(matchesQuery(card, 'goodbye')).toBe(false)
   })
 })
 

@@ -65,6 +65,23 @@ button:active {
   width: 100%;
 }
 
+/* Secondary detail on a primary button: present, but clearly subordinate. */
+.big .sub {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  opacity: 0.7;
+  margin-top: 0.2rem;
+}
+
+.skipped {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+
 .big:disabled {
   background: var(--surface);
   color: var(--dim);
