@@ -76,6 +76,11 @@ button:active {
   color: var(--dim);
 }
 
+/* Easy is a further jump, so it reads as the bolder of the two. */
+.easy {
+  background: var(--green);
+}
+
 .row {
   display: flex;
   gap: 0.8rem;

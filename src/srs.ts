@@ -30,20 +30,26 @@ export function newCard(hanzi: string, pinyin: string, english: string): Card {
   }
 }
 
+/**
+ * How well it went. `easy` skips a box so obvious words stop eating reviews —
+ * the cheap version of an SM-2 ease factor.
+ */
+export type Grade = 'again' | 'good' | 'easy'
+
 export function review(
   card: Card,
-  ok: boolean,
+  grade: Grade,
   now: number,
   practice = false,
 ): Card {
   const sighting = { ...card, seen: card.seen + 1, lastSeen: now }
-  if (!ok) {
+  if (grade === 'again') {
     return { ...sighting, box: 0, due: now, lapses: card.lapses + 1 }
   }
   // Drilling a card that isn't due must not inflate its interval — cramming
   // would otherwise push a word 32 days out after one good afternoon.
   if (practice) return sighting
-  const box = Math.min(card.box + 1, MAX_BOX)
+  const box = Math.min(card.box + (grade === 'easy' ? 2 : 1), MAX_BOX)
   return { ...sighting, box, due: now + INTERVALS[box] * DAY }
 }
 

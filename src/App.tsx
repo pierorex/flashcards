@@ -3,6 +3,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react'
 import { parseWords } from './parse'
 import {
   type Card,
+  type Grade,
   failRate,
   newCard,
   requeue,
@@ -98,12 +99,12 @@ export default function App() {
           key={sessionKey}
           due={session.cards}
           practice={session.practice}
-          onReview={(card, ok) => {
+          onReview={(card, grade) => {
             setPrevCards(cards)
             setCards((cs) =>
               cs.map((c) =>
                 c.id === card.id
-                  ? review(c, ok, Date.now(), session.practice)
+                  ? review(c, grade, Date.now(), session.practice)
                   : c,
               ),
             )
@@ -620,7 +621,7 @@ function Play({
 }: {
   due: Card[]
   practice: boolean
-  onReview: (card: Card, ok: boolean) => void
+  onReview: (card: Card, grade: Grade) => void
   onUndo: () => void
   remaining: () => number
   onAgain: () => void
@@ -632,8 +633,8 @@ function Play({
       dir: Math.random() < 0.5 ? 'zh-en' : 'en-zh',
     })),
   )
-  // The grade you gave, held while the answer is on screen to check against.
-  const [pending, setPending] = useState<boolean | null>(null)
+  // Whether you claimed to know it, held while you check the answer.
+  const [pending, setPending] = useState<'knew' | 'forgot' | null>(null)
   const [score, setScore] = useState({ right: 0, wrong: 0 })
   // Enough to put the last answered card back, for the too-fast tap.
   const [last, setLast] = useState<{
@@ -672,15 +673,15 @@ function Play({
     )
   }
 
-  /** Show the answer so you can check yourself, holding the grade until Next. */
-  function reveal(ok: boolean) {
-    setPending(ok)
-    if (!ok) speak(turn.card.hanzi)
+  /** Show the answer so you can check yourself before the grade is recorded. */
+  function reveal(knew: boolean) {
+    setPending(knew ? 'knew' : 'forgot')
+    if (!knew) speak(turn.card.hanzi)
   }
 
-  function next() {
-    const ok = pending!
-    onReview(turn.card, ok)
+  function next(grade: Grade) {
+    const ok = grade !== 'again'
+    onReview(turn.card, grade)
     setLast({ queue, score })
     setScore((s) => ({
       right: s.right + (ok ? 1 : 0),
@@ -732,18 +733,23 @@ function Play({
       </div>
 
       {revealed ? (
-        pending ? (
-          <div className="row">
+        pending === 'knew' ? (
+          <>
+            <div className="row">
+              <button className="big next" onClick={() => next('good')}>
+                Correct
+              </button>
+              <button className="big easy" onClick={() => next('easy')}>
+                Easy
+              </button>
+            </div>
             {/* Seeing the answer can change your mind — let it. */}
             <button className="ghost" onClick={() => reveal(false)}>
               Actually wrong
             </button>
-            <button className="big next" onClick={next}>
-              Correct
-            </button>
-          </div>
+          </>
         ) : (
-          <button className="big next" onClick={next}>
+          <button className="big next" onClick={() => next('again')}>
             Got it — next
           </button>
         )

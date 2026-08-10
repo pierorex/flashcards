@@ -16,14 +16,14 @@ describe('review tracking', () => {
   it('counts every sighting and remembers when', () => {
     let c = newCard('好', 'hǎo', 'good')
     expect([c.seen, c.lastSeen]).toEqual([0, 0])
-    c = review(c, true, now)
-    c = review(c, false, now + 1000)
+    c = review(c, 'good', now)
+    c = review(c, 'again', now + 1000)
     expect(c.seen).toBe(2)
     expect(c.lastSeen).toBe(now + 1000)
   })
 
   it('counts sightings during practice too', () => {
-    const c = review(newCard('好', 'hǎo', 'good'), true, now, true)
+    const c = review(newCard('好', 'hǎo', 'good'), 'good', now, true)
     expect(c.seen).toBe(1)
     expect(c.lastSeen).toBe(now)
   })
@@ -31,7 +31,7 @@ describe('review tracking', () => {
 
 describe('review', () => {
   it('promotes a correct card and pushes its due date out', () => {
-    const c = review(newCard('好', 'hǎo', 'good'), true, now)
+    const c = review(newCard('好', 'hǎo', 'good'), 'good', now)
     expect(c.box).toBe(1)
     expect(c.due).toBe(now + DAY)
   })
@@ -41,7 +41,7 @@ describe('review', () => {
     const gaps: number[] = []
     for (let i = 0; i < 5; i++) {
       const prev = c
-      c = review(c, true, now)
+      c = review(c, 'good', now)
       gaps.push(c.due - now)
       expect(c.box).toBe(prev.box + 1)
     }
@@ -51,24 +51,61 @@ describe('review', () => {
 
   it('caps the box so intervals stop growing forever', () => {
     let c = newCard('好', 'hǎo', 'good')
-    for (let i = 0; i < 20; i++) c = review(c, true, now)
-    const capped = review(c, true, now)
+    for (let i = 0; i < 20; i++) c = review(c, 'good', now)
+    const capped = review(c, 'good', now)
     expect(capped.box).toBe(c.box)
     expect(capped.due).toBe(c.due)
   })
 
   it('resets a failed card to due now and counts the lapse', () => {
     let c = newCard('好', 'hǎo', 'good')
-    for (let i = 0; i < 3; i++) c = review(c, true, now)
-    const failed = review(c, false, now)
+    for (let i = 0; i < 3; i++) c = review(c, 'good', now)
+    const failed = review(c, 'again', now)
     expect(failed.box).toBe(0)
     expect(failed.due).toBe(now)
     expect(failed.lapses).toBe(1)
   })
 
+  it('skips a box ahead when the word was easy', () => {
+    const easy = review(newCard('好', 'hǎo', 'good'), 'easy', now)
+    expect(easy.box).toBe(2)
+    expect(easy.due).toBe(now + 2 * DAY)
+  })
+
+  it('reaches a long interval in fewer reviews than plain good', () => {
+    let good = newCard('好', 'hǎo', 'good')
+    let easy = newCard('好', 'hǎo', 'good')
+    for (let i = 0; i < 3; i++) {
+      good = review(good, 'good', now)
+      easy = review(easy, 'easy', now)
+    }
+    expect(easy.due).toBeGreaterThan(good.due)
+  })
+
+  it('still respects the box cap when skipping ahead', () => {
+    let c = newCard('好', 'hǎo', 'good')
+    for (let i = 0; i < 20; i++) c = review(c, 'easy', now)
+    const capped = review(c, 'easy', now)
+    expect(capped.box).toBe(c.box)
+    expect(capped.due).toBe(c.due) // a real interval, not undefined * DAY
+  })
+
+  it('treats easy as a sighting like any other', () => {
+    const c = review(newCard('好', 'hǎo', 'good'), 'easy', now)
+    expect(c.seen).toBe(1)
+    expect(c.lapses).toBe(0)
+  })
+
+  it('does not promote on easy during practice either', () => {
+    const scheduled = review(newCard('好', 'hǎo', 'good'), 'good', now)
+    const drilled = review(scheduled, 'easy', now, true)
+    expect(drilled.box).toBe(scheduled.box)
+    expect(drilled.due).toBe(scheduled.due)
+  })
+
   it('does not mutate the card it is given', () => {
     const c = newCard('好', 'hǎo', 'good')
-    review(c, true, now)
+    review(c, 'good', now)
     expect(c.box).toBe(0)
     expect(c.due).toBe(0)
   })
@@ -148,22 +185,22 @@ describe('studySession', () => {
 
 describe('practice review', () => {
   it('never promotes a card past its real schedule', () => {
-    let c = review(newCard('好', 'hǎo', 'good'), true, now)
+    let c = review(newCard('好', 'hǎo', 'good'), 'good', now)
     const { box, due } = c
-    for (let i = 0; i < 5; i++) c = review(c, true, now, true)
+    for (let i = 0; i < 5; i++) c = review(c, 'good', now, true)
     expect({ box: c.box, due: c.due }).toEqual({ box, due })
   })
 
   it('still demotes a card that gets missed during practice', () => {
-    const c = review(newCard('好', 'hǎo', 'good'), true, now)
-    expect(review(c, false, now, true).box).toBe(0)
+    const c = review(newCard('好', 'hǎo', 'good'), 'good', now)
+    expect(review(c, 'again', now, true).box).toBe(0)
   })
 })
 
 describe('resetProgress', () => {
   it('wipes history but keeps the word itself', () => {
     let c = newCard('好', 'hǎo', 'good')
-    for (let i = 0; i < 4; i++) c = review(c, i % 2 === 0, now)
+    for (let i = 0; i < 4; i++) c = review(c, i % 2 === 0 ? 'good' : 'again', now)
     const fresh = resetProgress(c)
     expect(fresh).toEqual({
       id: c.id,
@@ -179,7 +216,7 @@ describe('resetProgress', () => {
   })
 
   it('makes the card due again immediately', () => {
-    const studied = review(newCard('好', 'hǎo', 'good'), true, now)
+    const studied = review(newCard('好', 'hǎo', 'good'), 'good', now)
     expect(dueCards([resetProgress(studied)], now)).toHaveLength(1)
   })
 })
