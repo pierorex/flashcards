@@ -129,6 +129,17 @@ textarea {
   text-align: center;
 }
 
+.update {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  background: var(--accent);
+  color: #08120a;
+  font-weight: 600;
+  z-index: 1;
+}
+
 /* --- deck --- */
 .deck {
   display: flex;

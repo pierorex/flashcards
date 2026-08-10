@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useRegisterSW } from 'virtual:pwa-register/react'
 import { parseWords } from './parse'
 import { type Card, newCard, requeue, review, studySession } from './srs'
 import { fromJSON, load, save } from './storage'
@@ -30,6 +31,8 @@ export default function App() {
 
   return (
     <main>
+      <UpdateBanner />
+
       {screen === 'home' && (
         <div className="home">
           <h1>汉字</h1>
@@ -99,6 +102,21 @@ export default function App() {
         />
       )}
     </main>
+  )
+}
+
+/** The app is cached for offline use, so a new build needs an explicit swap. */
+function UpdateBanner() {
+  const {
+    needRefresh: [needRefresh],
+    updateServiceWorker,
+  } = useRegisterSW()
+
+  if (!needRefresh) return null
+  return (
+    <button className="update" onClick={() => updateServiceWorker(true)}>
+      New version — tap to update
+    </button>
   )
 }
 

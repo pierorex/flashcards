@@ -30,3 +30,8 @@ replaces. Data lives on the device; JSON export/import is the backup story.
   asset path must go through `import.meta.env.BASE_URL`.
 - iOS Safari records audio as `audio/mp4`, not `audio/webm` — never hardcode a
   MediaRecorder mimeType.
+- The app is precached by a service worker, so a deploy does not reach an open
+  installed app until the user taps the "New version" banner. When testing a
+  change on a real phone, expect one extra reload.
+- `npm run preview` serves the built app with the service worker; `npm run dev`
+  does not precache. Test offline behaviour against preview only.
