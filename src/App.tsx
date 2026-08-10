@@ -14,6 +14,7 @@ import {
   worstWords,
 } from './srs'
 import { fromJSON, load, save } from './storage'
+import { type Point, isBackSwipe } from './swipe'
 import './App.css'
 
 function speak(hanzi: string) {
@@ -37,6 +38,39 @@ export default function App() {
   const [prevCards, setPrevCards] = useState<Card[] | null>(null)
 
   useEffect(() => save(cards), [cards])
+
+  // Swipe left to leave any screen, so you never have to reach for a button.
+  useEffect(() => {
+    if (screen === 'home') return
+    let start: Point | null = null
+
+    const onStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null
+      // Dragging inside a text field is caret work, not navigation.
+      if (e.touches.length > 1 || target?.closest('input, textarea')) {
+        start = null
+        return
+      }
+      start = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+
+    const onEnd = (e: TouchEvent) => {
+      if (!start) return
+      const end = {
+        x: e.changedTouches[0].clientX,
+        y: e.changedTouches[0].clientY,
+      }
+      if (isBackSwipe(start, end)) setScreen('home')
+      start = null
+    }
+
+    window.addEventListener('touchstart', onStart, { passive: true })
+    window.addEventListener('touchend', onEnd, { passive: true })
+    return () => {
+      window.removeEventListener('touchstart', onStart)
+      window.removeEventListener('touchend', onEnd)
+    }
+  }, [screen])
 
   const session = studySession(cards, Date.now())
 
