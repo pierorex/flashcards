@@ -31,6 +31,8 @@ export default function App() {
   const [cards, setCards] = useState<Card[]>(load)
   const [screen, setScreen] = useState<Screen>('home')
   const [sessionKey, setSessionKey] = useState(0)
+  // One step of undo: the deck as it was before the last answer.
+  const [prevCards, setPrevCards] = useState<Card[] | null>(null)
 
   useEffect(() => save(cards), [cards])
 
@@ -96,7 +98,8 @@ export default function App() {
           key={sessionKey}
           due={session.cards}
           practice={session.practice}
-          onReview={(card, ok) =>
+          onReview={(card, ok) => {
+            setPrevCards(cards)
             setCards((cs) =>
               cs.map((c) =>
                 c.id === card.id
@@ -104,7 +107,11 @@ export default function App() {
                   : c,
               ),
             )
-          }
+          }}
+          onUndo={() => {
+            if (prevCards) setCards(prevCards)
+            setPrevCards(null)
+          }}
           remaining={() => studySession(cards, Date.now()).due}
           onAgain={() => setSessionKey((k) => k + 1)}
           onDone={() => setScreen('home')}
@@ -606,6 +613,7 @@ function Play({
   due,
   practice,
   onReview,
+  onUndo,
   remaining,
   onAgain,
   onDone,
@@ -613,6 +621,7 @@ function Play({
   due: Card[]
   practice: boolean
   onReview: (card: Card, ok: boolean) => void
+  onUndo: () => void
   remaining: () => number
   onAgain: () => void
   onDone: () => void
@@ -626,14 +635,27 @@ function Play({
   // The grade you gave, held while the answer is on screen to check against.
   const [pending, setPending] = useState<boolean | null>(null)
   const [score, setScore] = useState({ right: 0, wrong: 0 })
+  // Enough to put the last answered card back, for the too-fast tap.
+  const [last, setLast] = useState<{
+    queue: Turn[]
+    score: { right: number; wrong: number }
+  } | null>(null)
   const revealed = pending !== null
 
   const turn = queue[0]
+
+  // `undo` is hoisted, so this can sit above it and serve both screens.
+  const undoButton = last && (
+    <button className="undo" onClick={undo} aria-label="Undo last answer">
+      ↺
+    </button>
+  )
 
   if (!turn) {
     const left = remaining()
     return (
       <div className="home">
+        {undoButton}
         <h1>{score.wrong === 0 ? '完美' : '好'}</h1>
         <p className="count">
           {score.right} right · {score.wrong} missed
@@ -659,6 +681,7 @@ function Play({
   function next() {
     const ok = pending!
     onReview(turn.card, ok)
+    setLast({ queue, score })
     setScore((s) => ({
       right: s.right + (ok ? 1 : 0),
       wrong: s.wrong + (ok ? 0 : 1),
@@ -668,11 +691,22 @@ function Play({
     setQueue((q) => (ok ? q.slice(1) : requeue(q.slice(1), turn, 3)))
   }
 
+  /** Take back the last answer and ask that card again, unflipped. */
+  function undo() {
+    if (!last) return
+    onUndo()
+    setQueue(last.queue)
+    setScore(last.score)
+    setPending(null)
+    setLast(null)
+  }
+
   const showZh = turn.dir === 'zh-en' || revealed
   const showEn = turn.dir === 'en-zh' || revealed
 
   return (
     <div className="play">
+      {undoButton}
       <button className="close" onClick={onDone} aria-label="End session">
         ✕
       </button>
@@ -705,7 +739,7 @@ function Play({
               Actually wrong
             </button>
             <button className="big next" onClick={next}>
-              Correct — next
+              Correct
             </button>
           </div>
         ) : (
