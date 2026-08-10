@@ -1,5 +1,7 @@
 main {
   position: relative; /* anchors the session close button */
+  /* The browser keeps vertical panning and zoom; sideways drags are ours. */
+  touch-action: pan-y pinch-zoom;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;

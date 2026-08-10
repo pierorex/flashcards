@@ -14,7 +14,7 @@ import {
   worstWords,
 } from './srs'
 import { fromJSON, load, save } from './storage'
-import { type Point, isBackSwipe } from './swipe'
+import { SLOP, isBackDrag, shouldCommit } from './swipe'
 import './App.css'
 
 function speak(hanzi: string) {
@@ -36,46 +36,89 @@ export default function App() {
   const [sessionKey, setSessionKey] = useState(0)
   // One step of undo: the deck as it was before the last answer.
   const [prevCards, setPrevCards] = useState<Card[] | null>(null)
+  const shell = useRef<HTMLElement>(null)
 
   useEffect(() => save(cards), [cards])
 
-  // Swipe left to leave any screen, so you never have to reach for a button.
+  /**
+   * Drag left to leave a screen: the page follows your finger and snaps back
+   * if you let go early, so the gesture shows you what it is about to do.
+   */
   useEffect(() => {
-    if (screen === 'home') return
-    let start: Point | null = null
+    const el = shell.current
+    if (!el || screen === 'home') return
+
+    let startX = 0
+    let startY = 0
+    let tracking = false // a touch we might care about
+    let dragging = false // committed to being a back drag
+    let dx = 0
+
+    const settle = (animate: boolean) => {
+      el.style.transition = animate ? 'transform 0.18s ease-out' : 'none'
+      el.style.transform = ''
+      tracking = false
+      dragging = false
+      dx = 0
+    }
 
     const onStart = (e: TouchEvent) => {
       const target = e.target as HTMLElement | null
       // Dragging inside a text field is caret work, not navigation.
-      if (e.touches.length > 1 || target?.closest('input, textarea')) {
-        start = null
-        return
-      }
-      start = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      if (e.touches.length !== 1 || target?.closest('input, textarea')) return
+      startX = e.touches[0].clientX
+      startY = e.touches[0].clientY
+      tracking = true
+      dragging = false
+      dx = 0
+      el.style.transition = 'none'
     }
 
-    const onEnd = (e: TouchEvent) => {
-      if (!start) return
-      const end = {
-        x: e.changedTouches[0].clientX,
-        y: e.changedTouches[0].clientY,
+    const onMove = (e: TouchEvent) => {
+      if (!tracking || e.touches.length !== 1) return
+      dx = e.touches[0].clientX - startX
+      const dy = e.touches[0].clientY - startY
+
+      if (!dragging) {
+        if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return // still deciding
+        if (!isBackDrag(dx, dy)) {
+          tracking = false // it is a scroll; hands off
+          return
+        }
+        dragging = true
       }
-      if (isBackSwipe(start, end)) setScreen('home')
-      start = null
+
+      // Claim the gesture so the browser stops trying to scroll with it.
+      if (e.cancelable) e.preventDefault()
+      el.style.transform = `translateX(${Math.min(0, dx)}px)`
     }
 
-    window.addEventListener('touchstart', onStart, { passive: true })
-    window.addEventListener('touchend', onEnd, { passive: true })
+    const onEnd = () => {
+      const commit = dragging && shouldCommit(dx, window.innerWidth)
+      settle(!commit)
+      if (commit) setScreen('home')
+    }
+
+    // Interrupted, not released: the system took the gesture, so never commit.
+    const onCancel = () => settle(true)
+
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd, { passive: true })
+    el.addEventListener('touchcancel', onCancel, { passive: true })
     return () => {
-      window.removeEventListener('touchstart', onStart)
-      window.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onCancel)
+      settle(false)
     }
   }, [screen])
 
   const session = studySession(cards, Date.now())
 
   return (
-    <main>
+    <main ref={shell}>
       <UpdateBanner />
 
       {screen === 'home' && (

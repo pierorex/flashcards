@@ -1,15 +1,18 @@
-export type Point = { x: number; y: number }
-
-/** Far enough that it cannot be a stray finger movement during a tap. */
-const MIN_DISTANCE = 60
+/** Movement before we decide whose gesture this is. */
+export const SLOP = 10
 
 /**
- * A leftward drag means "go back". Rightward is left alone: that is the OS
- * edge gesture, and fighting it would break the phone's own navigation.
+ * Is this drag a back gesture? Judged from the first few pixels, because a
+ * thumb swipe arcs downward — by the end of it the vertical component can
+ * easily win, even though the intent was plainly sideways.
+ *
+ * Rightward is left alone: that is the OS edge gesture.
  */
-export function isBackSwipe(start: Point, end: Point): boolean {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  // Mostly horizontal, so vertical scrolling never counts as a swipe.
-  return dx <= -MIN_DISTANCE && Math.abs(dx) > Math.abs(dy) * 1.5
+export function isBackDrag(dx: number, dy: number): boolean {
+  return dx < 0 && Math.abs(dx) > Math.abs(dy)
+}
+
+/** Far enough to mean it: 30% of the screen, capped so big phones stay easy. */
+export function shouldCommit(dx: number, width: number): boolean {
+  return dx <= -Math.min(120, width * 0.3)
 }
