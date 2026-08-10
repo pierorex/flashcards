@@ -623,8 +623,10 @@ function Play({
       dir: Math.random() < 0.5 ? 'zh-en' : 'en-zh',
     })),
   )
-  const [revealed, setRevealed] = useState(false)
+  // The grade you gave, held while the answer is on screen to check against.
+  const [pending, setPending] = useState<boolean | null>(null)
   const [score, setScore] = useState({ right: 0, wrong: 0 })
+  const revealed = pending !== null
 
   const turn = queue[0]
 
@@ -648,20 +650,22 @@ function Play({
     )
   }
 
-  function grade(ok: boolean) {
+  /** Show the answer so you can check yourself, holding the grade until Next. */
+  function reveal(ok: boolean) {
+    setPending(ok)
+    if (!ok) speak(turn.card.hanzi)
+  }
+
+  function next() {
+    const ok = pending!
     onReview(turn.card, ok)
     setScore((s) => ({
       right: s.right + (ok ? 1 : 0),
       wrong: s.wrong + (ok ? 0 : 1),
     }))
-    setRevealed(false)
+    setPending(null)
     // Missed cards come back later this session; correct ones are done for now.
     setQueue((q) => (ok ? q.slice(1) : requeue(q.slice(1), turn, 3)))
-  }
-
-  function miss() {
-    setRevealed(true)
-    speak(turn.card.hanzi)
   }
 
   const showZh = turn.dir === 'zh-en' || revealed
@@ -694,17 +698,33 @@ function Play({
       </div>
 
       {revealed ? (
-        <button className="big next" onClick={() => grade(false)}>
-          Got it — next
-        </button>
+        pending ? (
+          <div className="row">
+            {/* Seeing the answer can change your mind — let it. */}
+            <button className="ghost" onClick={() => reveal(false)}>
+              Actually wrong
+            </button>
+            <button className="big next" onClick={next}>
+              Correct — next
+            </button>
+          </div>
+        ) : (
+          <button className="big next" onClick={next}>
+            Got it — next
+          </button>
+        )
       ) : (
         <div className="row">
-          <button className="grade wrong" onClick={miss} aria-label="I forgot">
+          <button
+            className="grade wrong"
+            onClick={() => reveal(false)}
+            aria-label="I forgot"
+          >
             ✕
           </button>
           <button
             className="grade right"
-            onClick={() => grade(true)}
+            onClick={() => reveal(true)}
             aria-label="I knew it"
           >
             ✓
