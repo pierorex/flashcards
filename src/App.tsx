@@ -45,7 +45,7 @@ export default function App() {
       <UpdateBanner />
 
       {screen === 'home' && (
-        <div className="home menu">
+        <div className="home">
           <h1>汉字</h1>
           {/* Ordered by thumb reach: what you tap most sits lowest. */}
           {cards.length > 0 && (
