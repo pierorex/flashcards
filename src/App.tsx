@@ -6,6 +6,7 @@ import {
   failRate,
   newCard,
   requeue,
+  resetProgress,
   review,
   studySession,
   worstWords,
@@ -42,19 +43,12 @@ export default function App() {
       {screen === 'home' && (
         <div className="home">
           <h1>汉字</h1>
-          <p className="count">
-            {cards.length === 0
-              ? 'No words yet.'
-              : session.practice
-                ? `Nothing due — ${cards.length} in the deck`
-                : `${session.due} of ${cards.length} due`}
-          </p>
           <button
             className="big"
             disabled={cards.length === 0}
             onClick={() => setScreen('play')}
           >
-            {session.practice ? 'Practice anyway' : 'Study'}
+            Study ({cards.length} {cards.length === 1 ? 'word' : 'words'})
           </button>
           {cards.length > 0 && (
             <button className="ghost" onClick={() => setScreen('auto')}>
@@ -66,7 +60,7 @@ export default function App() {
           </button>
           {cards.length > 0 && (
             <button className="ghost" onClick={() => setScreen('deck')}>
-              Deck ({cards.length})
+              Deck
             </button>
           )}
         </div>
@@ -354,6 +348,18 @@ function Deck({
         }}
       />
       <Stats cards={cards} onPick={setEditing} />
+      {cards.some((c) => c.seen > 0 || c.box > 0) && (
+        <button
+          className="ghost danger"
+          onClick={() => {
+            if (confirm(`Reset all progress? The ${cards.length} words stay.`)) {
+              onChange(cards.map(resetProgress))
+            }
+          }}
+        >
+          Reset progress
+        </button>
+      )}
     </div>
   )
 }
@@ -509,7 +515,7 @@ function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
             () => say(card.english, 'en-US', 0.95),
             () => wait(500),
             () => say(card.hanzi, 'zh-CN', 0.75),
-            () => wait(400),
+            () => wait(800),
             () => say(card.hanzi, 'zh-CN', 0.75),
             () => wait(1200),
           ]

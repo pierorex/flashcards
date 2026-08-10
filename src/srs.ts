@@ -70,6 +70,12 @@ export function dueCards(cards: Card[], now: number): Card[] {
   return cards.filter((c) => c.due <= now).sort((a, b) => a.due - b.due)
 }
 
+/** Forget everything learned about a word, keeping the word. */
+export const resetProgress = (card: Card): Card => ({
+  ...newCard(card.hanzi, card.pinyin, card.english),
+  id: card.id,
+})
+
 /** How badly a word is going, 0 (solid) to 1 (always wrong). */
 export const failRate = (card: Card): number =>
   card.seen > 0 ? card.lapses / card.seen : 0.5 // never seen is a coin flip

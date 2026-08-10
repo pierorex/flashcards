@@ -4,6 +4,7 @@ import {
   dueCards,
   newCard,
   requeue,
+  resetProgress,
   review,
   studySession,
   worstWords,
@@ -156,6 +157,30 @@ describe('practice review', () => {
   it('still demotes a card that gets missed during practice', () => {
     const c = review(newCard('好', 'hǎo', 'good'), true, now)
     expect(review(c, false, now, true).box).toBe(0)
+  })
+})
+
+describe('resetProgress', () => {
+  it('wipes history but keeps the word itself', () => {
+    let c = newCard('好', 'hǎo', 'good')
+    for (let i = 0; i < 4; i++) c = review(c, i % 2 === 0, now)
+    const fresh = resetProgress(c)
+    expect(fresh).toEqual({
+      id: c.id,
+      hanzi: '好',
+      pinyin: 'hǎo',
+      english: 'good',
+      box: 0,
+      due: 0,
+      lapses: 0,
+      seen: 0,
+      lastSeen: 0,
+    })
+  })
+
+  it('makes the card due again immediately', () => {
+    const studied = review(newCard('好', 'hǎo', 'good'), true, now)
+    expect(dueCards([resetProgress(studied)], now)).toHaveLength(1)
   })
 })
 
