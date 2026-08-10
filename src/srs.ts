@@ -42,15 +42,21 @@ export function review(
 
 /**
  * What to study right now: the due cards, or the whole deck as free practice
- * when nothing is due, so there is never a dead end.
+ * when nothing is due, so there is never a dead end. `due` is the real backlog
+ * — never the practice fallback — so callers can say "N more due" honestly.
  */
 export function studySession(
   cards: Card[],
   now: number,
-): { cards: Card[]; practice: boolean } {
+  cap = Infinity,
+): { cards: Card[]; practice: boolean; due: number } {
   const due = dueCards(cards, now)
-  if (due.length > 0) return { cards: due, practice: false }
-  return { cards, practice: cards.length > 0 }
+  const pick = due.length > 0 ? due : cards
+  return {
+    cards: pick.slice(0, cap),
+    practice: due.length === 0 && cards.length > 0,
+    due: due.length,
+  }
 }
 
 export function dueCards(cards: Card[], now: number): Card[] {

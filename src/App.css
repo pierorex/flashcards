@@ -10,6 +10,11 @@ main {
   gap: 1rem;
 }
 
+/* A long word list scrolls from the top; everything else stays centred. */
+main:has(.deck) {
+  justify-content: flex-start;
+}
+
 h1 {
   font-size: 3rem;
   margin: 0;
@@ -96,7 +101,8 @@ button:active {
 }
 
 /* --- add form --- */
-input {
+input,
+textarea {
   font: inherit;
   padding: 0.9rem 1rem;
   border-radius: 0.9rem;
@@ -106,14 +112,82 @@ input {
   width: 100%;
 }
 
-input:focus {
+input:focus,
+textarea:focus {
   outline: 2px solid var(--accent);
   border-color: transparent;
+}
+
+textarea {
+  resize: vertical;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .hanzi-input {
   font-size: 1.8rem;
   text-align: center;
+}
+
+/* --- deck --- */
+.deck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.words {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+}
+
+.words li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
+.word {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: left;
+  padding: 0.7rem 0.9rem;
+}
+
+.w-hanzi {
+  font-size: 1.5rem;
+}
+
+.w-meaning {
+  font-size: 0.9rem;
+  color: var(--dim);
+}
+
+.w-meaning em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.w-box {
+  font-size: 0.75rem;
+  color: var(--dim);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.del {
+  background: none;
+  color: var(--dim);
+  padding: 0 0.9rem;
 }
 
 /* --- play --- */

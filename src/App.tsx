@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { parseWords } from './parse'
 import { type Card, newCard, requeue, review, studySession } from './srs'
-import { load, save } from './storage'
+import { fromJSON, load, save } from './storage'
 import './App.css'
+
+const SESSION_CAP = 20
 
 function speak(hanzi: string) {
   const u = new SpeechSynthesisUtterance(hanzi)
@@ -14,14 +17,16 @@ function speak(hanzi: string) {
 /** Which side of the card is hidden. */
 type Direction = 'zh-en' | 'en-zh'
 type Turn = { card: Card; dir: Direction }
+type Screen = 'home' | 'add' | 'deck' | 'play'
 
 export default function App() {
   const [cards, setCards] = useState<Card[]>(load)
-  const [screen, setScreen] = useState<'home' | 'add' | 'play'>('home')
+  const [screen, setScreen] = useState<Screen>('home')
+  const [sessionKey, setSessionKey] = useState(0)
 
   useEffect(() => save(cards), [cards])
 
-  const session = studySession(cards, Date.now())
+  const session = studySession(cards, Date.now(), SESSION_CAP)
 
   return (
     <main>
@@ -33,7 +38,7 @@ export default function App() {
               ? 'No words yet.'
               : session.practice
                 ? `Nothing due — ${cards.length} in the deck`
-                : `${session.cards.length} of ${cards.length} due`}
+                : `${session.due} of ${cards.length} due`}
           </p>
           <button
             className="big"
@@ -45,18 +50,38 @@ export default function App() {
           <button className="ghost" onClick={() => setScreen('add')}>
             Add words
           </button>
+          {cards.length > 0 && (
+            <button className="ghost" onClick={() => setScreen('deck')}>
+              Deck ({cards.length})
+            </button>
+          )}
         </div>
       )}
 
       {screen === 'add' && (
-        <AddWords
-          onAdd={(c) => setCards((cs) => [...cs, c])}
+        <Add
+          known={cards.map((c) => c.hanzi)}
+          onAdd={(rows) =>
+            setCards((cs) => [
+              ...cs,
+              ...rows.map((r) => newCard(r.hanzi, r.pinyin, r.english)),
+            ])
+          }
+          onDone={() => setScreen('home')}
+        />
+      )}
+
+      {screen === 'deck' && (
+        <Deck
+          cards={cards}
+          onChange={setCards}
           onDone={() => setScreen('home')}
         />
       )}
 
       {screen === 'play' && (
         <Play
+          key={sessionKey}
           due={session.cards}
           practice={session.practice}
           onReview={(card, ok) =>
@@ -68,6 +93,8 @@ export default function App() {
               ),
             )
           }
+          remaining={() => studySession(cards, Date.now()).due}
+          onAgain={() => setSessionKey((k) => k + 1)}
           onDone={() => setScreen('home')}
         />
       )}
@@ -75,24 +102,30 @@ export default function App() {
   )
 }
 
-function AddWords({
-  onAdd,
-  onDone,
+function WordForm({
+  initial,
+  submitLabel,
+  onSubmit,
+  onCancel,
 }: {
-  onAdd: (c: Card) => void
-  onDone: () => void
+  initial?: { hanzi: string; pinyin: string; english: string }
+  submitLabel: string
+  onSubmit: (row: { hanzi: string; pinyin: string; english: string }) => void
+  onCancel: () => void
 }) {
-  const [hanzi, setHanzi] = useState('')
-  const [pinyin, setPinyin] = useState('')
-  const [english, setEnglish] = useState('')
-  const [added, setAdded] = useState<string[]>([])
+  const [hanzi, setHanzi] = useState(initial?.hanzi ?? '')
+  const [pinyin, setPinyin] = useState(initial?.pinyin ?? '')
+  const [english, setEnglish] = useState(initial?.english ?? '')
   const first = useRef<HTMLInputElement>(null)
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!hanzi.trim() || !english.trim()) return
-    onAdd(newCard(hanzi.trim(), pinyin.trim(), english.trim()))
-    setAdded((a) => [hanzi.trim(), ...a])
+    onSubmit({
+      hanzi: hanzi.trim(),
+      pinyin: pinyin.trim(),
+      english: english.trim(),
+    })
     setHanzi('')
     setPinyin('')
     setEnglish('')
@@ -120,17 +153,181 @@ function AddWords({
         placeholder="english"
       />
       <div className="row">
-        <button type="button" className="ghost" onClick={onDone}>
+        <button type="button" className="ghost" onClick={onCancel}>
           Done
         </button>
         <button type="submit" className="big">
-          Add
+          {submitLabel}
         </button>
       </div>
-      {added.length > 0 && (
-        <p className="count">Added: {added.slice(0, 8).join('  ')}</p>
-      )}
     </form>
+  )
+}
+
+function Add({
+  known,
+  onAdd,
+  onDone,
+}: {
+  known: string[]
+  onAdd: (rows: { hanzi: string; pinyin: string; english: string }[]) => void
+  onDone: () => void
+}) {
+  const [bulk, setBulk] = useState(false)
+  const [text, setText] = useState('')
+  const [added, setAdded] = useState<string[]>([])
+
+  function importPaste() {
+    const rows = parseWords(text, [...known, ...added])
+    if (rows.length === 0) return
+    onAdd(rows)
+    setAdded((a) => [...rows.map((r) => r.hanzi), ...a])
+    setText('')
+  }
+
+  return (
+    <>
+      {bulk ? (
+        <div className="add">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={'你好, nǐ hǎo, hello\n水, shuǐ, water'}
+            rows={8}
+            autoFocus
+          />
+          <p className="count">One word per line: 汉字, pinyin, english</p>
+          <div className="row">
+            <button className="ghost" onClick={() => setBulk(false)}>
+              One at a time
+            </button>
+            <button className="big" onClick={importPaste}>
+              Import
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <WordForm
+            submitLabel="Add"
+            onSubmit={(row) => {
+              onAdd([row])
+              setAdded((a) => [row.hanzi, ...a])
+            }}
+            onCancel={onDone}
+          />
+          <button className="ghost" onClick={() => setBulk(true)}>
+            Paste a list
+          </button>
+        </>
+      )}
+      {added.length > 0 && (
+        <p className="count">
+          Added {added.length}: {added.slice(0, 8).join('  ')}
+        </p>
+      )}
+      {bulk && (
+        <button className="ghost" onClick={onDone}>
+          Done
+        </button>
+      )}
+    </>
+  )
+}
+
+function Deck({
+  cards,
+  onChange,
+  onDone,
+}: {
+  cards: Card[]
+  onChange: (cards: Card[]) => void
+  onDone: () => void
+}) {
+  const [editing, setEditing] = useState<Card | null>(null)
+  const file = useRef<HTMLInputElement>(null)
+
+  if (editing) {
+    return (
+      <WordForm
+        initial={editing}
+        submitLabel="Save"
+        onSubmit={(row) => {
+          onChange(cards.map((c) => (c.id === editing.id ? { ...c, ...row } : c)))
+          setEditing(null)
+        }}
+        onCancel={() => setEditing(null)}
+      />
+    )
+  }
+
+  function exportDeck() {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(cards, null, 2)], { type: 'application/json' }),
+    )
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `flashcards-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function importDeck(f: File) {
+    const restored = fromJSON(await f.text())
+    if (!restored) {
+      alert("That file isn't a flashcards backup.")
+      return
+    }
+    if (confirm(`Replace ${cards.length} words with ${restored.length}?`)) {
+      onChange(restored)
+    }
+  }
+
+  return (
+    <div className="deck">
+      <div className="row">
+        <button className="ghost" onClick={onDone}>
+          ← Back
+        </button>
+        <button className="ghost" onClick={exportDeck}>
+          Export
+        </button>
+        <button className="ghost" onClick={() => file.current?.click()}>
+          Import
+        </button>
+      </div>
+      <input
+        ref={file}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) importDeck(f)
+          e.target.value = ''
+        }}
+      />
+      <ul className="words">
+        {cards.map((c) => (
+          <li key={c.id}>
+            <button className="word" onClick={() => setEditing(c)}>
+              <span className="w-hanzi">{c.hanzi}</span>
+              <span className="w-meaning">
+                {c.pinyin && <em>{c.pinyin}</em>} {c.english}
+              </span>
+              {c.box > 0 && <span className="w-box">{c.box}</span>}
+            </button>
+            <button
+              className="del"
+              aria-label={`Delete ${c.hanzi}`}
+              onClick={() => onChange(cards.filter((x) => x.id !== c.id))}
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -138,11 +335,15 @@ function Play({
   due,
   practice,
   onReview,
+  remaining,
+  onAgain,
   onDone,
 }: {
   due: Card[]
   practice: boolean
   onReview: (card: Card, ok: boolean) => void
+  remaining: () => number
+  onAgain: () => void
   onDone: () => void
 }) {
   const [queue, setQueue] = useState<Turn[]>(() =>
@@ -157,13 +358,19 @@ function Play({
   const turn = queue[0]
 
   if (!turn) {
+    const left = remaining()
     return (
       <div className="home">
         <h1>{score.wrong === 0 ? '完美' : '好'}</h1>
         <p className="count">
           {score.right} right · {score.wrong} missed
         </p>
-        <button className="big" onClick={onDone}>
+        {left > 0 && (
+          <button className="big" onClick={onAgain}>
+            {left} more due — keep going
+          </button>
+        )}
+        <button className={left > 0 ? 'ghost' : 'big'} onClick={onDone}>
           Done
         </button>
       </div>

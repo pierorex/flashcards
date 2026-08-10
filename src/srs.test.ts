@@ -69,6 +69,7 @@ describe('studySession', () => {
     expect(studySession([due, later], now)).toEqual({
       cards: [due],
       practice: false,
+      due: 1,
     })
   })
 
@@ -77,11 +78,45 @@ describe('studySession', () => {
     expect(studySession([later], now)).toEqual({
       cards: [later],
       practice: true,
+      due: 0,
     })
   })
 
+  it('reports zero still due when the fallback deck is what is on offer', () => {
+    const later = { ...newCard('b', 'b', 'b'), due: now + DAY }
+    expect(studySession([later], now).due).toBe(0)
+  })
+
+  it('reports the full due count even when the session is capped', () => {
+    const many = Array.from({ length: 50 }, (_, i) =>
+      newCard(String(i), '', String(i)),
+    )
+    expect(studySession(many, now, 20).due).toBe(50)
+  })
+
   it('has nothing to study with an empty deck', () => {
-    expect(studySession([], now)).toEqual({ cards: [], practice: false })
+    expect(studySession([], now)).toEqual({
+      cards: [],
+      practice: false,
+      due: 0,
+    })
+  })
+
+  it('caps a session so a big backlog is not one endless slog', () => {
+    const many = Array.from({ length: 50 }, (_, i) =>
+      newCard(String(i), '', String(i)),
+    )
+    expect(studySession(many, now, 20).cards).toHaveLength(20)
+  })
+
+  it('caps free practice too', () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({
+      ...newCard(String(i), '', String(i)),
+      due: now + DAY,
+    }))
+    const session = studySession(many, now, 20)
+    expect(session.practice).toBe(true)
+    expect(session.cards).toHaveLength(20)
   })
 })
 
