@@ -35,3 +35,8 @@ replaces. Data lives on the device; JSON export/import is the backup story.
   change on a real phone, expect one extra reload.
 - `npm run preview` serves the built app with the service worker; `npm run dev`
   does not precache. Test offline behaviour against preview only.
+- Autopilot audio cannot survive the screen locking or the app being
+  backgrounded: iOS suspends JS, and `speechSynthesis` is not routed through the
+  OS media session. A screen wake lock is the workaround. True background audio
+  would need pre-rendered audio files (macOS `say -v Tingting`) played through
+  an `<audio>` element with Media Session metadata.

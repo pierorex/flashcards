@@ -1,4 +1,5 @@
 main {
+  position: relative; /* anchors the session close button */
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -147,61 +148,75 @@ textarea {
   gap: 0.8rem;
 }
 
-.words {
-  list-style: none;
-  margin: 0;
+.stats {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats th {
   padding: 0;
+  font-weight: 400;
+}
+
+.stats th button {
+  width: 100%;
+  background: none;
+  color: var(--dim);
+  font-size: 0.85rem;
+  padding: 0.5rem 0.2rem;
+  border-radius: 0.5rem;
+}
+
+.stats th button.sorted {
+  color: var(--accent);
+}
+
+.stats td {
+  padding: 0.55rem 0.2rem;
+  border-top: 1px solid var(--line);
+  text-align: center;
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+
+.stats td:first-child {
+  text-align: left;
+  color: inherit;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  overflow-y: auto;
+  gap: 0.1rem;
+  padding-right: 0.6rem;
 }
 
-.words li {
-  display: flex;
-  gap: 0.4rem;
-  align-items: stretch;
-}
-
-.word {
-  flex: 1;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.8rem;
-  text-align: left;
-  padding: 0.7rem 0.9rem;
+.stats tr.leech td {
+  background: color-mix(in srgb, var(--red) 12%, transparent);
 }
 
 .w-hanzi {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
 }
 
 .w-meaning {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--dim);
 }
 
-.w-meaning em {
-  color: var(--accent);
-  font-style: normal;
-}
-
-.w-box {
-  font-size: 0.75rem;
-  color: var(--dim);
-  background: var(--bg);
-  border-radius: 999px;
-  padding: 0.15rem 0.5rem;
-}
-
-.del {
-  background: none;
-  color: var(--dim);
-  padding: 0 0.9rem;
+.danger {
+  color: var(--red);
 }
 
 /* --- play --- */
+.close {
+  position: absolute;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: 0.75rem;
+  background: none;
+  color: var(--dim);
+  font-size: 1.3rem;
+  padding: 0.5rem 0.9rem;
+}
+
 .progress {
   color: var(--dim);
   font-size: 0.85rem;

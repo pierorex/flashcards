@@ -25,6 +25,26 @@ describe('storage', () => {
     expect(load()).toEqual([])
   })
 
+  it('fills in counters missing from decks saved by older versions', () => {
+    localStorage.setItem(
+      'flashcards.v1',
+      JSON.stringify([
+        { id: 'a', hanzi: '好', pinyin: 'hǎo', english: 'good', box: 2, due: 5, lapses: 1 },
+      ]),
+    )
+    expect(load()[0]).toEqual({
+      id: 'a',
+      hanzi: '好',
+      pinyin: 'hǎo',
+      english: 'good',
+      box: 2,
+      due: 5,
+      lapses: 1,
+      seen: 0,
+      lastSeen: 0,
+    })
+  })
+
   it('recovers with an empty deck instead of crashing on corrupt data', () => {
     localStorage.setItem('flashcards.v1', '{ not json')
     expect(load()).toEqual([])

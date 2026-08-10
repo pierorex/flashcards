@@ -12,6 +12,8 @@ export type Card = {
   box: number
   due: number
   lapses: number
+  seen: number
+  lastSeen: number
 }
 
 export function newCard(hanzi: string, pinyin: string, english: string): Card {
@@ -23,6 +25,8 @@ export function newCard(hanzi: string, pinyin: string, english: string): Card {
     box: 0,
     due: 0, // epoch 0 = due forever ago, i.e. show it now
     lapses: 0,
+    seen: 0,
+    lastSeen: 0,
   }
 }
 
@@ -32,12 +36,15 @@ export function review(
   now: number,
   practice = false,
 ): Card {
-  if (!ok) return { ...card, box: 0, due: now, lapses: card.lapses + 1 }
+  const sighting = { ...card, seen: card.seen + 1, lastSeen: now }
+  if (!ok) {
+    return { ...sighting, box: 0, due: now, lapses: card.lapses + 1 }
+  }
   // Drilling a card that isn't due must not inflate its interval — cramming
   // would otherwise push a word 32 days out after one good afternoon.
-  if (practice) return card
+  if (practice) return sighting
   const box = Math.min(card.box + 1, MAX_BOX)
-  return { ...card, box, due: now + INTERVALS[box] * DAY }
+  return { ...sighting, box, due: now + INTERVALS[box] * DAY }
 }
 
 /**
@@ -61,6 +68,22 @@ export function studySession(
 
 export function dueCards(cards: Card[], now: number): Card[] {
   return cards.filter((c) => c.due <= now).sort((a, b) => a.due - b.due)
+}
+
+/** How badly a word is going, 0 (solid) to 1 (always wrong). */
+export const failRate = (card: Card): number =>
+  card.seen > 0 ? card.lapses / card.seen : 0.5 // never seen is a coin flip
+
+/** The n words you struggle with most — worst first. */
+export function worstWords(cards: Card[], n: number): Card[] {
+  return [...cards]
+    .sort(
+      (a, b) =>
+        failRate(b) - failRate(a) ||
+        b.lapses - a.lapses ||
+        a.box - b.box,
+    )
+    .slice(0, n)
 }
 
 /** Put a missed card back into the session queue, `gap` cards from now. */

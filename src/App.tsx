@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { parseWords } from './parse'
-import { type Card, newCard, requeue, review, studySession } from './srs'
+import {
+  type Card,
+  failRate,
+  newCard,
+  requeue,
+  review,
+  studySession,
+  worstWords,
+} from './srs'
 import { fromJSON, load, save } from './storage'
 import './App.css'
-
-const SESSION_CAP = 20
 
 function speak(hanzi: string) {
   const u = new SpeechSynthesisUtterance(hanzi)
@@ -18,7 +24,7 @@ function speak(hanzi: string) {
 /** Which side of the card is hidden. */
 type Direction = 'zh-en' | 'en-zh'
 type Turn = { card: Card; dir: Direction }
-type Screen = 'home' | 'add' | 'deck' | 'play'
+type Screen = 'home' | 'add' | 'deck' | 'play' | 'auto'
 
 export default function App() {
   const [cards, setCards] = useState<Card[]>(load)
@@ -27,7 +33,7 @@ export default function App() {
 
   useEffect(() => save(cards), [cards])
 
-  const session = studySession(cards, Date.now(), SESSION_CAP)
+  const session = studySession(cards, Date.now())
 
   return (
     <main>
@@ -50,6 +56,11 @@ export default function App() {
           >
             {session.practice ? 'Practice anyway' : 'Study'}
           </button>
+          {cards.length > 0 && (
+            <button className="ghost" onClick={() => setScreen('auto')}>
+              Autopilot
+            </button>
+          )}
           <button className="ghost" onClick={() => setScreen('add')}>
             Add words
           </button>
@@ -80,6 +91,10 @@ export default function App() {
           onChange={setCards}
           onDone={() => setScreen('home')}
         />
+      )}
+
+      {screen === 'auto' && (
+        <Autopilot cards={cards} onDone={() => setScreen('home')} />
       )}
 
       {screen === 'play' && (
@@ -267,15 +282,28 @@ function Deck({
 
   if (editing) {
     return (
-      <WordForm
-        initial={editing}
-        submitLabel="Save"
-        onSubmit={(row) => {
-          onChange(cards.map((c) => (c.id === editing.id ? { ...c, ...row } : c)))
-          setEditing(null)
-        }}
-        onCancel={() => setEditing(null)}
-      />
+      <>
+        <WordForm
+          initial={editing}
+          submitLabel="Save"
+          onSubmit={(row) => {
+            onChange(
+              cards.map((c) => (c.id === editing.id ? { ...c, ...row } : c)),
+            )
+            setEditing(null)
+          }}
+          onCancel={() => setEditing(null)}
+        />
+        <button
+          className="ghost danger"
+          onClick={() => {
+            onChange(cards.filter((c) => c.id !== editing.id))
+            setEditing(null)
+          }}
+        >
+          Delete {editing.hanzi}
+        </button>
+      </>
     )
   }
 
@@ -325,26 +353,245 @@ function Deck({
           e.target.value = ''
         }}
       />
-      <ul className="words">
-        {cards.map((c) => (
-          <li key={c.id}>
-            <button className="word" onClick={() => setEditing(c)}>
-              <span className="w-hanzi">{c.hanzi}</span>
-              <span className="w-meaning">
-                {c.pinyin && <em>{c.pinyin}</em>} {c.english}
-              </span>
-              {c.box > 0 && <span className="w-box">{c.box}</span>}
-            </button>
-            <button
-              className="del"
-              aria-label={`Delete ${c.hanzi}`}
-              onClick={() => onChange(cards.filter((x) => x.id !== c.id))}
+      <Stats cards={cards} onPick={setEditing} />
+    </div>
+  )
+}
+
+type SortKey = 'word' | 'seen' | 'right' | 'wrong' | 'rate' | 'box'
+
+const COLUMNS: { key: SortKey; label: string; title: string }[] = [
+  { key: 'word', label: '词', title: 'Word' },
+  { key: 'seen', label: '👁', title: 'Times seen' },
+  { key: 'right', label: '✓', title: 'Remembered' },
+  { key: 'wrong', label: '✕', title: 'Forgotten' },
+  { key: 'rate', label: '%', title: 'Success rate' },
+  { key: 'box', label: '📦', title: 'Leitner box — higher is better known' },
+]
+
+const value = (c: Card, key: SortKey): number | string => {
+  switch (key) {
+    case 'word':
+      return c.english // alphabetical by meaning; hanzi order is codepoints
+    case 'seen':
+      return c.seen
+    case 'right':
+      return c.seen - c.lapses
+    case 'wrong':
+      return c.lapses
+    case 'rate':
+      return 1 - failRate(c)
+    case 'box':
+      return c.box
+  }
+}
+
+function Stats({
+  cards,
+  onPick,
+}: {
+  cards: Card[]
+  onPick: (c: Card) => void
+}) {
+  // Worst first: the words that need work are the point of this table.
+  const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({
+    key: 'rate',
+    asc: true,
+  })
+
+  const rows = [...cards].sort((a, b) => {
+    const [x, y] = [value(a, sort.key), value(b, sort.key)]
+    const cmp =
+      typeof x === 'string' && typeof y === 'string'
+        ? x.localeCompare(y)
+        : (x as number) - (y as number)
+    return sort.asc ? cmp : -cmp
+  })
+
+  const seen = cards.reduce((n, c) => n + c.seen, 0)
+  const lapses = cards.reduce((n, c) => n + c.lapses, 0)
+  const leeches = cards.filter((c) => c.lapses >= 8).length
+
+  return (
+    <>
+      <p className="count">
+        {cards.length} words
+        {seen > 0 && ` · ${Math.round(((seen - lapses) / seen) * 100)}% overall`}
+        {leeches > 0 && ` · ${leeches} stuck`}
+      </p>
+      <table className="stats">
+        <thead>
+          <tr>
+            {COLUMNS.map((col) => (
+              <th key={col.key}>
+                <button
+                  title={col.title}
+                  aria-label={col.title}
+                  className={sort.key === col.key ? 'sorted' : ''}
+                  onClick={() =>
+                    setSort((s) =>
+                      s.key === col.key
+                        ? { key: col.key, asc: !s.asc }
+                        : { key: col.key, asc: col.key === 'word' },
+                    )
+                  }
+                >
+                  {col.label}
+                  {sort.key === col.key && (sort.asc ? ' ↑' : ' ↓')}
+                </button>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => (
+            <tr
+              key={c.id}
+              onClick={() => onPick(c)}
+              className={c.lapses >= 8 ? 'leech' : undefined}
             >
-              ✕
-            </button>
-          </li>
-        ))}
-      </ul>
+              <td>
+                <span className="w-hanzi">{c.hanzi}</span>
+                <span className="w-meaning">{c.english}</span>
+              </td>
+              <td>{c.seen}</td>
+              <td>{c.seen - c.lapses}</td>
+              <td>{c.lapses}</td>
+              <td>
+                {c.seen === 0
+                  ? '—'
+                  : `${Math.round((1 - failRate(c)) * 100)}%`}
+              </td>
+              <td>{c.box}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
+const say = (text: string, lang: string, rate: number) =>
+  new Promise<void>((resolve) => {
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = lang
+    u.rate = rate
+    u.onend = () => resolve()
+    u.onerror = () => resolve() // a dead voice must not stall the loop
+    speechSynthesis.speak(u)
+  })
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Hands-free drilling: loops your worst words aloud, english then hanzi.
+ * Holds a screen wake lock — iOS suspends JS (and speech) once the app is
+ * backgrounded or the screen locks, so staying awake and foregrounded is the
+ * only way the audio keeps going.
+ */
+function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
+  const [size, setSize] = useState(Math.min(10, cards.length))
+  const [words, setWords] = useState<Card[] | null>(null)
+  const [current, setCurrent] = useState<Card | null>(null)
+
+  useEffect(() => {
+    if (!words || words.length === 0) return
+    let stopped = false
+
+    async function loop() {
+      while (!stopped) {
+        for (const card of words!) {
+          if (stopped) return
+          setCurrent(card)
+          // Every step is guarded: speaking even once after Stop is jarring
+          // when this is running next to a sleeping person.
+          const steps = [
+            () => say(card.english, 'en-US', 0.95),
+            () => wait(500),
+            () => say(card.hanzi, 'zh-CN', 0.75),
+            () => wait(400),
+            () => say(card.hanzi, 'zh-CN', 0.75),
+            () => wait(1200),
+          ]
+          for (const step of steps) {
+            if (stopped) return
+            await step()
+          }
+        }
+      }
+    }
+    loop()
+
+    return () => {
+      stopped = true
+      speechSynthesis.cancel()
+    }
+  }, [words])
+
+  // Keep the screen on; re-request it after the phone has been unlocked.
+  useEffect(() => {
+    if (!words) return
+    let lock: WakeLockSentinel | null = null
+    const acquire = async () => {
+      try {
+        lock = (await navigator.wakeLock?.request('screen')) ?? null
+      } catch {
+        // Wake lock is a nicety; without it the screen just dims as usual.
+      }
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') acquire()
+    }
+    acquire()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      lock?.release().catch(() => {})
+    }
+  }, [words])
+
+  if (!words) {
+    return (
+      <div className="home">
+        <h1>自动</h1>
+        <p className="count">
+          Loops your {size} worst words aloud — english, then chinese twice.
+        </p>
+        <input
+          type="range"
+          min={1}
+          max={cards.length}
+          value={size}
+          onChange={(e) => setSize(Number(e.target.value))}
+          aria-label="How many words"
+        />
+        <p className="count">
+          {size} of {cards.length} words
+        </p>
+        <button className="big" onClick={() => setWords(worstWords(cards, size))}>
+          Start
+        </button>
+        <button className="ghost" onClick={onDone}>
+          Back
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="play">
+      <button className="close" onClick={onDone} aria-label="Stop autopilot">
+        ✕
+      </button>
+      <div className="progress">{words.length} words · looping</div>
+      <div className="card">
+        <div className="english">{current?.english}</div>
+        <div className="hanzi">{current?.hanzi}</div>
+        <div className="pinyin">{current?.pinyin}</div>
+      </div>
+      <button className="big" onClick={onDone}>
+        Stop
+      </button>
     </div>
   )
 }
@@ -416,6 +663,9 @@ function Play({
 
   return (
     <div className="play">
+      <button className="close" onClick={onDone} aria-label="End session">
+        ✕
+      </button>
       <div className="progress">
         {queue.length} left{practice && ' · practice'}
       </div>
