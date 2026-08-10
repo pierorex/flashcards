@@ -16,6 +16,15 @@ main:has(.deck) {
   justify-content: flex-start;
 }
 
+/* The home menu fills the screen so Study lands low, under your thumb. */
+.menu {
+  flex: 1;
+}
+
+.menu h1 {
+  margin: 12vh 0 auto; /* title up top, buttons pushed to the bottom */
+}
+
 h1 {
   font-size: 3rem;
   margin: 0;

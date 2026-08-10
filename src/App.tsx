@@ -45,8 +45,22 @@ export default function App() {
       <UpdateBanner />
 
       {screen === 'home' && (
-        <div className="home">
+        <div className="home menu">
           <h1>汉字</h1>
+          {/* Ordered by thumb reach: what you tap most sits lowest. */}
+          {cards.length > 0 && (
+            <button className="ghost" onClick={() => setScreen('deck')}>
+              Deck
+            </button>
+          )}
+          <button className="ghost" onClick={() => setScreen('add')}>
+            Add words
+          </button>
+          {cards.length > 0 && (
+            <button className="ghost" onClick={() => setScreen('auto')}>
+              Autopilot
+            </button>
+          )}
           <button
             className="big"
             disabled={cards.length === 0}
@@ -57,19 +71,6 @@ export default function App() {
               {session.due} left today, {cards.length} total
             </span>
           </button>
-          {cards.length > 0 && (
-            <button className="ghost" onClick={() => setScreen('auto')}>
-              Autopilot
-            </button>
-          )}
-          <button className="ghost" onClick={() => setScreen('add')}>
-            Add words
-          </button>
-          {cards.length > 0 && (
-            <button className="ghost" onClick={() => setScreen('deck')}>
-              Deck
-            </button>
-          )}
         </div>
       )}
 
