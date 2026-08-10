@@ -51,7 +51,7 @@ export default function App() {
             disabled={cards.length === 0}
             onClick={() => setScreen('play')}
           >
-            Study ({cards.length} {cards.length === 1 ? 'word' : 'words'})
+            Study - {session.due} left today, {cards.length} total
           </button>
           {cards.length > 0 && (
             <button className="ghost" onClick={() => setScreen('auto')}>
@@ -570,6 +570,7 @@ function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
         <h1>自动</h1>
         <p className="count">
           Loops your {size} worst words aloud — english, then chinese twice.
+          Useful while commuting or sleeping.
         </p>
         <input
           type="range"
