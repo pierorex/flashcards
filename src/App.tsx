@@ -5,12 +5,15 @@ import {
   type Card,
   type Grade,
   failRate,
+  loopAt,
   newCard,
   requeue,
   resetProgress,
   review,
   matchesQuery,
+  stepBack,
   studySession,
+  toggleFlag,
   worstWords,
 } from './srs'
 import { fromJSON, load, save } from './storage'
@@ -174,7 +177,13 @@ export default function App() {
       )}
 
       {screen === 'auto' && (
-        <Autopilot cards={cards} onDone={() => setScreen('home')} />
+        <Autopilot
+          cards={cards}
+          onFlag={(id) =>
+            setCards((cs) => cs.map((c) => (c.id === id ? toggleFlag(c) : c)))
+          }
+          onDone={() => setScreen('home')}
+        />
       )}
 
       {screen === 'play' && (
@@ -402,6 +411,17 @@ function Deck({
           onCancel={() => setEditing(null)}
         />
         <button
+          className="ghost"
+          onClick={() => {
+            onChange(
+              cards.map((c) => (c.id === editing.id ? toggleFlag(c) : c)),
+            )
+            setEditing(null)
+          }}
+        >
+          {editing.flagged ? '🚩 Remove flag' : '⚐ Flag for review'}
+        </button>
+        <button
           className="ghost danger"
           onClick={() => {
             onChange(cards.filter((c) => c.id !== editing.id))
@@ -518,8 +538,11 @@ function Stats({
     asc: true,
   })
   const [query, setQuery] = useState('')
+  const [onlyFlagged, setOnlyFlagged] = useState(false)
 
-  const found = query ? cards.filter((c) => matchesQuery(c, query)) : cards
+  const flagged = cards.filter((c) => c.flagged)
+  const pool = onlyFlagged ? flagged : cards
+  const found = query ? pool.filter((c) => matchesQuery(c, query)) : pool
   const rows = [...found].sort((a, b) => {
     const [x, y] = [value(a, sort.key), value(b, sort.key)]
     const cmp =
@@ -541,16 +564,27 @@ function Stats({
         placeholder="Search 汉字, pinyin or meaning"
         aria-label="Search your deck"
       />
+      {/* Stays visible while filtering even if the last flag was just removed,
+          so the filter can always be turned back off. */}
+      {(flagged.length > 0 || onlyFlagged) && (
+        <button
+          className={onlyFlagged ? 'ghost flagged' : 'ghost'}
+          onClick={() => setOnlyFlagged((f) => !f)}
+        >
+          🚩 {flagged.length} flagged{onlyFlagged ? ' — show all' : ''}
+        </button>
+      )}
       <p className="count">
-        {query
+        {query || onlyFlagged
           ? `${rows.length} of ${cards.length} words`
           : `${cards.length} words`}
         {!query &&
+          !onlyFlagged &&
           seen > 0 &&
           ` · ${Math.round(((seen - lapses) / seen) * 100)}% overall`}
-        {!query && leeches > 0 && ` · ${leeches} stuck`}
+        {!query && !onlyFlagged && leeches > 0 && ` · ${leeches} stuck`}
       </p>
-      {query && rows.length === 0 && (
+      {query && rows.length === 0 && !onlyFlagged && (
         <p className="count">Not in your deck yet.</p>
       )}
       <table className="stats">
@@ -585,7 +619,10 @@ function Stats({
               className={c.lapses >= 8 ? 'leech' : undefined}
             >
               <td>
-                <span className="w-hanzi">{c.hanzi}</span>
+                <span className="w-hanzi">
+                  {c.hanzi}
+                  {c.flagged && ' 🚩'}
+                </span>
                 <span className="w-meaning">{c.english}</span>
               </td>
               <td>{c.seen}</td>
@@ -623,10 +660,20 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * backgrounded or the screen locks, so staying awake and foregrounded is the
  * only way the audio keeps going.
  */
-function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
+function Autopilot({
+  cards,
+  onFlag,
+  onDone,
+}: {
+  cards: Card[]
+  onFlag: (id: string) => void
+  onDone: () => void
+}) {
   const [size, setSize] = useState(Math.min(10, cards.length))
   const [words, setWords] = useState<Card[] | null>(null)
-  const [current, setCurrent] = useState<Card | null>(null)
+  // The loop reads `pos` so a tap can move it mid-word; `spot` renders it.
+  const pos = useRef(0)
+  const [spot, setSpot] = useState(0)
 
   useEffect(() => {
     if (!words || words.length === 0) return
@@ -634,24 +681,28 @@ function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
 
     async function loop() {
       while (!stopped) {
-        for (const card of words!) {
+        const at = pos.current
+        setSpot(at)
+        const card = loopAt(words!, at)
+        // Every step is guarded: speaking even once after Stop is jarring
+        // when this is running next to a sleeping person.
+        const steps = [
+          () => say(card.english, 'en-US', 0.95),
+          () => wait(1000), // room to guess before the answer arrives
+          () => say(card.hanzi, 'zh-CN', 0.75),
+          () => wait(800),
+          () => say(card.hanzi, 'zh-CN', 0.75),
+          () => wait(800),
+          () => say(card.hanzi, 'zh-CN', 0.75),
+          () => wait(1200),
+        ]
+        for (const step of steps) {
           if (stopped) return
-          setCurrent(card)
-          // Every step is guarded: speaking even once after Stop is jarring
-          // when this is running next to a sleeping person.
-          const steps = [
-            () => say(card.english, 'en-US', 0.95),
-            () => wait(500),
-            () => say(card.hanzi, 'zh-CN', 0.75),
-            () => wait(800),
-            () => say(card.hanzi, 'zh-CN', 0.75),
-            () => wait(1200),
-          ]
-          for (const step of steps) {
-            if (stopped) return
-            await step()
-          }
+          await step()
+          if (stopped) return
+          if (pos.current !== at) break // you moved; drop the rest of this word
         }
+        if (pos.current === at) pos.current = at + 1
       }
     }
     loop()
@@ -661,6 +712,13 @@ function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
       speechSynthesis.cancel()
     }
   }, [words])
+
+  /** Rewind. Tap repeatedly to walk back through a section. */
+  function back() {
+    pos.current = stepBack(pos.current)
+    setSpot(pos.current)
+    speechSynthesis.cancel() // cut the current word short so the jump is heard
+  }
 
   // Keep the screen on; re-request it after the phone has been unlocked.
   useEffect(() => {
@@ -689,8 +747,8 @@ function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
       <div className="home">
         <h1>自动</h1>
         <p className="count">
-          Loops your {size} worst words aloud — english, then chinese twice.
-          Useful while commuting or sleeping.
+          Loops your {size} worst words aloud — english, then chinese three
+          times. Useful while commuting or sleeping.
         </p>
         <input
           type="range"
@@ -713,16 +771,34 @@ function Autopilot({ cards, onDone }: { cards: Card[]; onDone: () => void }) {
     )
   }
 
+  const current = loopAt(words, spot)
+  // Read the flag off the live deck, so it updates the moment you tap it.
+  const flagged = cards.find((c) => c.id === current.id)?.flagged
+
   return (
     <div className="play">
       <button className="close" onClick={onDone} aria-label="Stop autopilot">
         ✕
       </button>
-      <div className="progress">{words.length} words · looping</div>
+      <div className="progress">
+        {(spot % words.length) + 1} of {words.length} · looping
+      </div>
       <div className="card">
-        <div className="english">{current?.english}</div>
-        <div className="hanzi">{current?.hanzi}</div>
-        <div className="pinyin">{current?.pinyin}</div>
+        <div className="english">{current.english}</div>
+        <div className="hanzi">{current.hanzi}</div>
+        <div className="pinyin">{current.pinyin}</div>
+      </div>
+      <div className="row">
+        <button className="ghost" onClick={back} aria-label="Previous word">
+          ↩ Back
+        </button>
+        <button
+          className={flagged ? 'ghost flagged' : 'ghost'}
+          onClick={() => onFlag(current.id)}
+          aria-label={flagged ? 'Unflag this word' : 'Flag this word'}
+        >
+          {flagged ? '🚩 Flagged' : '⚐ Flag'}
+        </button>
       </div>
       <button className="big" onClick={onDone}>
         Stop

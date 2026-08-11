@@ -8,6 +8,9 @@ import {
   resetProgress,
   review,
   studySession,
+  loopAt,
+  stepBack,
+  toggleFlag,
   worstWords,
 } from './srs'
 
@@ -322,5 +325,58 @@ describe('requeue', () => {
 
   it('still reinserts when it is the only card left', () => {
     expect(requeue([], 'a', 3)).toEqual(['a'])
+  })
+})
+
+describe('loopAt', () => {
+  const words = ['a', 'b', 'c']
+
+  it('walks forward through the list', () => {
+    expect([0, 1, 2].map((p) => loopAt(words, p))).toEqual(['a', 'b', 'c'])
+  })
+
+  it('wraps round so the loop never runs out', () => {
+    expect(loopAt(words, 3)).toBe('a')
+    expect(loopAt(words, 7)).toBe('b')
+  })
+})
+
+describe('stepBack', () => {
+  it('goes back one word', () => {
+    expect(stepBack(5)).toBe(4)
+  })
+
+  it('goes back several so a whole section can be repeated', () => {
+    expect(stepBack(5, 3)).toBe(2)
+  })
+
+  it('stops at the first word instead of going negative', () => {
+    expect(stepBack(0)).toBe(0)
+    expect(stepBack(2, 9)).toBe(0)
+  })
+})
+
+describe('toggleFlag', () => {
+  it('flags a word without touching its scheduling', () => {
+    const c = review(newCard('好', 'hǎo', 'good'), 'good', now)
+    const f = toggleFlag(c)
+    expect(f.flagged).toBe(true)
+    expect({ ...f, flagged: undefined }).toEqual({ ...c, flagged: undefined })
+  })
+
+  it('unflags a flagged word', () => {
+    expect(toggleFlag(toggleFlag(newCard('好', 'hǎo', 'good'))).flagged).toBe(false)
+  })
+
+  it('treats an old card with no flag field as unflagged', () => {
+    expect(toggleFlag(newCard('好', 'hǎo', 'good')).flagged).toBe(true)
+  })
+})
+
+describe('flags outlive a progress reset', () => {
+  it('keeps the flag when stats are cleared', () => {
+    const c = toggleFlag(review(newCard('好', 'hǎo', 'good'), 'good', now))
+    const r = resetProgress(c)
+    expect([r.flagged, r.seen, r.box]).toEqual([true, 0, 0])
   })
 })

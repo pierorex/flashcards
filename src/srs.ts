@@ -14,6 +14,8 @@ export type Card = {
   lapses: number
   seen: number
   lastSeen: number
+  /** Marked as suspect — something about the word itself needs a look. */
+  flagged?: boolean
 }
 
 export function newCard(hanzi: string, pinyin: string, english: string): Card {
@@ -76,10 +78,23 @@ export function dueCards(cards: Card[], now: number): Card[] {
   return cards.filter((c) => c.due <= now).sort((a, b) => a.due - b.due)
 }
 
+export const toggleFlag = (card: Card): Card => ({
+  ...card,
+  flagged: !card.flagged,
+})
+
+/** Autopilot counts forward forever; the list wraps under it. */
+export const loopAt = <T>(items: T[], pos: number): T =>
+  items[pos % items.length]
+
+/** Rewind the loop, clamped so it cannot run off the front. */
+export const stepBack = (pos: number, n = 1): number => Math.max(0, pos - n)
+
 /** Forget everything learned about a word, keeping the word. */
 export const resetProgress = (card: Card): Card => ({
   ...newCard(card.hanzi, card.pinyin, card.english),
   id: card.id,
+  flagged: card.flagged, // a flag is a note about the word, not progress
 })
 
 /** How badly a word is going, 0 (solid) to 1 (always wrong). */

@@ -297,3 +297,8 @@ textarea {
   font-size: 1.5rem;
   padding: 0.3rem;
 }
+
+/* A flag is a note to self, not an error — amber, not red. */
+.flagged {
+  color: #e8b339;
+}
