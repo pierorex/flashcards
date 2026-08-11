@@ -44,8 +44,8 @@ export default function App() {
   useEffect(() => save(cards), [cards])
 
   /**
-   * Drag left to leave a screen: the page follows your finger and snaps back
-   * if you let go early, so the gesture shows you what it is about to do.
+   * Drag right to leave a screen, as iOS does: the page follows your finger and
+   * snaps back if you let go early, so the gesture shows what it is about to do.
    */
   useEffect(() => {
     const el = shell.current
@@ -93,7 +93,7 @@ export default function App() {
 
       // Claim the gesture so the browser stops trying to scroll with it.
       if (e.cancelable) e.preventDefault()
-      el.style.transform = `translateX(${Math.min(0, dx)}px)`
+      el.style.transform = `translateX(${Math.max(0, dx)}px)`
     }
 
     const onEnd = () => {
