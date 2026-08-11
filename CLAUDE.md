@@ -24,6 +24,22 @@ rolled back with `git revert`.
 No backend, no accounts, no analytics, no dependency that a few lines of code
 replaces. Data lives on the device; JSON export/import is the backup story.
 
+### 4. Opus scopes, Sonnet grinds
+
+Opus does the thinking that is expensive to get wrong: scoping the change,
+deciding what the behaviour should be, and writing the failing tests. Then spawn
+a Sonnet `executor` agent to iterate on the implementation until `npm test` is
+green, and check its work.
+
+Give the agent everything it needs to work without asking: the files to touch,
+the tests that must pass, and the constraint that it may not edit the tests to
+make them pass. If it stalls or the tests were wrong, that is Opus's problem to
+fix — take it back rather than letting Sonnet redesign.
+
+Skip the handoff when the change is smaller than the briefing: a one-line fix, a
+CSS tweak, or anything already half-written. Layout and CSS have no tests to
+iterate against, so they stay with whoever is looking at the screen.
+
 ## Gotchas
 
 - `vite.config.ts` sets `base: '/flashcards/'` for GitHub Pages. Any absolute
