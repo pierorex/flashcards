@@ -13,10 +13,11 @@ import {
   matchesQuery,
   stepBack,
   studySession,
+  thinkTime,
   toggleFlag,
   worstWords,
 } from './srs'
-import { fromJSON, load, save } from './storage'
+import { fromJSON, load, loadPos, save, savePos } from './storage'
 import { SLOP, isBackDrag, shouldCommit } from './swipe'
 import './App.css'
 
@@ -672,8 +673,9 @@ function Autopilot({
   const [size, setSize] = useState(Math.min(10, cards.length))
   const [words, setWords] = useState<Card[] | null>(null)
   // The loop reads `pos` so a tap can move it mid-word; `spot` renders it.
-  const pos = useRef(0)
-  const [spot, setSpot] = useState(0)
+  // It starts where the last session left off rather than back at the top.
+  const pos = useRef(loadPos())
+  const [spot, setSpot] = useState(pos.current)
 
   useEffect(() => {
     if (!words || words.length === 0) return
@@ -683,12 +685,13 @@ function Autopilot({
       while (!stopped) {
         const at = pos.current
         setSpot(at)
+        savePos(at)
         const card = loopAt(words!, at)
         // Every step is guarded: speaking even once after Stop is jarring
         // when this is running next to a sleeping person.
         const steps = [
           () => say(card.english, 'en-US', 0.95),
-          () => wait(1000), // room to guess before the answer arrives
+          () => wait(thinkTime(card.hanzi)), // longer phrase, longer silence
           () => say(card.hanzi, 'zh-CN', 0.75),
           () => wait(800),
           () => say(card.hanzi, 'zh-CN', 0.75),

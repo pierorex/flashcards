@@ -10,6 +10,7 @@ import {
   studySession,
   loopAt,
   stepBack,
+  thinkTime,
   toggleFlag,
   worstWords,
 } from './srs'
@@ -378,5 +379,25 @@ describe('flags outlive a progress reset', () => {
     const c = toggleFlag(review(newCard('好', 'hǎo', 'good'), 'good', now))
     const r = resetProgress(c)
     expect([r.flagged, r.seen, r.box]).toEqual([true, 0, 0])
+  })
+})
+
+describe('thinkTime', () => {
+  it('gives a single character the base pause', () => {
+    expect(thinkTime('好')).toBe(1000)
+  })
+
+  it('adds 0.2s for each extra character', () => {
+    expect(thinkTime('你好')).toBe(1200)
+    expect(thinkTime('我不知道')).toBe(1600)
+  })
+
+  it('counts hanzi only, so punctuation buys no time', () => {
+    expect(thinkTime('你好，世界')).toBe(thinkTime('你好世界'))
+    expect(thinkTime('好 ')).toBe(1000)
+  })
+
+  it('still pauses for a word with no hanzi at all', () => {
+    expect(thinkTime('?')).toBe(1000)
   })
 })

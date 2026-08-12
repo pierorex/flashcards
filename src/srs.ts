@@ -83,6 +83,16 @@ export const toggleFlag = (card: Card): Card => ({
   flagged: !card.flagged,
 })
 
+/**
+ * How long to leave for a guess before the answer is spoken. A longer phrase is
+ * more to recall, so it earns more silence — counted in hanzi, so punctuation
+ * buys nothing.
+ */
+export function thinkTime(hanzi: string, base = 1000, per = 200): number {
+  const chars = hanzi.match(/\p{Script=Han}/gu)?.length ?? 1
+  return base + per * Math.max(0, chars - 1)
+}
+
 /** Autopilot counts forward forever; the list wraps under it. */
 export const loopAt = <T>(items: T[], pos: number): T =>
   items[pos % items.length]

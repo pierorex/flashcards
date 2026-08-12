@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { newCard } from './srs'
-import { fromJSON, load, save } from './storage'
+import { fromJSON, load, loadPos, save, savePos } from './storage'
 
 const store: Record<string, string> = {}
 globalThis.localStorage = {
@@ -65,5 +65,28 @@ describe('fromJSON', () => {
 
   it('accepts an empty deck file', () => {
     expect(fromJSON('[]')).toEqual([])
+  })
+})
+
+describe('autopilot position', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('starts at the first word on a fresh device', () => {
+    expect(loadPos()).toBe(0)
+  })
+
+  it('round-trips where the loop got to', () => {
+    savePos(7)
+    expect(loadPos()).toBe(7)
+  })
+
+  it('ignores a garbled value instead of crashing the loop', () => {
+    localStorage.setItem('flashcards.auto', 'banana')
+    expect(loadPos()).toBe(0)
+  })
+
+  it('never resumes at a negative position', () => {
+    localStorage.setItem('flashcards.auto', '-4')
+    expect(loadPos()).toBe(0)
   })
 })

@@ -18,6 +18,15 @@ export function save(cards: Card[]): void {
   localStorage.setItem(KEY, JSON.stringify(cards))
 }
 
+const POS = 'flashcards.auto'
+
+/** Where autopilot got to, so reopening it picks up instead of restarting. */
+export const loadPos = (): number =>
+  Math.max(0, Math.floor(Number(localStorage.getItem(POS))) || 0)
+
+export const savePos = (pos: number): void =>
+  localStorage.setItem(POS, String(pos))
+
 /** Read a backup file. Returns null if it isn't a deck — never a partial one. */
 export function fromJSON(text: string): Card[] | null {
   let parsed: unknown
